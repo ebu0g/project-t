@@ -29,12 +29,9 @@ struct User {
     string destination_place;
     string arrival_time;
 
-    map<string, list<string>> flight;
     map<string, list<string>> users;
     map<string, list<string>> crew;
     map<string, list<string>> tracks;
-
-    map<string, list<string>> check;
 
     void displayOptions();
 
@@ -262,9 +259,9 @@ void User::checkIn() {
 }
 
 void User::bookTicket() {
-    string inputEmail;
-    cout << "Please enter your email address: ";
-    cin >> inputEmail;
+    string user_id;
+    cout << "Please enter your use_id: ";
+    cin >> user_id;
 
     sqlite3* db;
     sqlite3_stmt* stmt;
@@ -277,7 +274,7 @@ void User::bookTicket() {
         return;
     }
 
-    string sql = "SELECT USERID, NAME, PASSPORTID FROM REGISTRATION_user WHERE EMAIL = '" + inputEmail + "';";
+    string sql = "SELECT USERID, NAME, PASSPORTID FROM REGISTRATION_user WHERE USERID = '" + user_id + "';";
 
     rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
@@ -354,12 +351,45 @@ void User::bookTicket() {
         string chosen_flight_id;
         cin >> chosen_flight_id;
 
-        cout << "Enter payment: ";
-        cin.ignore();
-        getline(cin, payment);
+
+
+
+        sqlite3* db;
+            int rc;
+            char* zErrMsg = nullptr;
+            string sql;
+
+            rc = sqlite3_open("user.db", &db);
+            if (rc != SQLITE_OK) {
+                cout << "Database connection failed: " << sqlite3_errmsg(db) << endl;
+                return;
+            }
+
+            rc = sqlite3_exec(db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, &zErrMsg);
+            if (rc != SQLITE_OK) {
+                cout << "Can't enable foreign key support in book ticket table: " << zErrMsg << endl;
+                sqlite3_free(zErrMsg);
+            }
+
+
+            sql = "CREATE TABLE IF NOT EXISTS BOOK_TICKET("
+                  "USERID TEXT PRIMARY KEY NOT NULL,"
+                  "NAME TEXT NOT NULL,"
+                  "FLIGHT_ID TEXT,"
+                  "FOREIGN KEY (USERID) REFERENCES REGISTRATION_USER (USERID),"
+                  "FOREIGN KEY (FLIGHT_ID) REFERENCES FLIGHT_TABLE (FLIGHT_ID),"
+                  "FOREIGN KEY (USERID) REFERENCES REGISTRATION_USER (USERID));";
+
+           rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &zErrMsg);
+            if (rc != SQLITE_OK) {
+                cout << "SQL error: " << zErrMsg << endl;
+                sqlite3_free(zErrMsg);
+            }
+
+
 
         // Check if the booking already exists
-        sql = "SELECT COUNT(*) FROM BOOKING WHERE USERID = ? AND NAME = ?";
+       sql = "SELECT COUNT(*) FROM BOOK_TICKET WHERE USERID = ? AND NAME = ?";
         rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
         if (rc != SQLITE_OK) {
             cout << "SQL error: " << sqlite3_errmsg(db) << endl;
@@ -381,7 +411,7 @@ void User::bookTicket() {
         sqlite3_finalize(stmt);
 
         // Insert the new booking
-        sql = "INSERT INTO BOOKING (USERID, NAME, PAYMENT, FLIGHT_ID) VALUES (?, ?, ?, ?)";
+        sql = "INSERT INTO BOOK_TICKET (USERID, NAME, FLIGHT_ID) VALUES (?, ?, ?)";
         rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
         if (rc != SQLITE_OK) {
             cout << "SQL error: " << sqlite3_errmsg(db) << endl;
@@ -391,7 +421,6 @@ void User::bookTicket() {
 
         sqlite3_bind_text(stmt, 1, userId.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 2, name.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 3, payment.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 4, chosen_flight_id.c_str(), -1, SQLITE_STATIC);
 
         rc = sqlite3_step(stmt);
